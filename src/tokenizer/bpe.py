@@ -17,6 +17,8 @@ from sortedcontainers import SortedList
 from .constants import PAT, DESIRED_NUM_CHUNKS
 import logging
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -131,11 +133,17 @@ def pre_tokenize_file(
     with file_path.open("rb") as f:
         boundaries = find_chunk_boundaries(f, desired_num_chunks, split_special_token)
 
-        for start, end in zip(boundaries[:-1], boundaries[1:]):
-            f.seek(start)
-            chunk: str = f.read(end - start).decode("utf-8", errors="ignore")
-            per_chunk_counts = pre_tokenize_one_chunk(chunk, split_special_token, pre_tokenizer_regexp)
-            counter.update(per_chunk_counts)
+        with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+            futures = []
+            for start, end in zip(boundaries[:-1], boundaries[1:]):
+                f.seek(start)
+                chunk: str = f.read(end - start).decode("utf-8", errors="ignore")
+                futures.append(
+                    executor.submit(pre_tokenize_one_chunk, chunk, split_special_token, pre_tokenizer_regexp)
+                )
+
+            for future in as_completed(futures):
+                counter.update(future.result())
     return dict(counter)
 
 
