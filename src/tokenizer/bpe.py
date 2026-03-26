@@ -14,7 +14,7 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import total_ordering
 from sortedcontainers import SortedList
-from .constants import PAT, DESIRED_NUM_CHUNKS
+from constants import PAT, DESIRED_NUM_CHUNKS
 import logging
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
