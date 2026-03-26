@@ -30,9 +30,12 @@ dev = ["ruff"]
 requires = ["uv_build>=0.8.3,<0.9.0"]
 build-backend = "uv_build"
 
-[tool.uv.build-backend]
-module-name = "cs336_basics"
-module-root = ""
+[tool.uv_build]
+packages = [
+    { path = "src/tokenizer", name = "tokenizer" },
+    { path = "src/cs336_basics", name = "cs336_basics" },
+]
+
 
 [tool.uv]
 package = true
