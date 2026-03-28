@@ -14,7 +14,7 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import total_ordering
 from sortedcontainers import SortedList
-from constants import PAT, DESIRED_NUM_CHUNKS
+from tokenizer.constants import PAT, DESIRED_NUM_CHUNKS
 import logging
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -141,9 +141,11 @@ def pre_tokenize_file(
                 futures.append(
                     executor.submit(pre_tokenize_one_chunk, chunk, split_special_token, pre_tokenizer_regexp)
                 )
-
+            finished_cnt = 0
             for future in as_completed(futures):
+                finished_cnt += 1
                 counter.update(future.result())
+                logging.info(f"Finished chunks count: {finished_cnt}/{desired_num_chunks}")
     return dict(counter)
 
 
@@ -204,8 +206,13 @@ def train_bpe_from_word_count(
                 # add back to heap
                 bpe_status.CountHeap.add(bpe_status.index[pair])
 
+    logging.info("Merge init finished.")
+
     # do one merge
     while len(bpe_status.vocab) < vocab_size and bpe_status.CountHeap:
+        if len(bpe_status.vocab) % 1000 == 0:
+            logging.info(f"Vocab size: {len(bpe_status.vocab)}")
+
         most_popular_pair_detail = bpe_status.CountHeap.pop()
         del bpe_status.index[most_popular_pair_detail.bytes_pair]
 
@@ -288,6 +295,8 @@ def train_bpe_from_word_count(
                     bpe_status.index[t] = TokenPairDetails(t, c * word_status.count, {word})
                     bpe_status.CountHeap.add(bpe_status.index[t])
 
+    logging.info("Vocab finished.")
+
     return dict(enumerate(bpe_status.vocab)), [(pair.first, pair.second) for pair in bpe_status.merges]
 
 
@@ -299,4 +308,5 @@ def train_bpe_from_file(
     # pre_tokenizer_regexp: str,
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     word_count = pre_tokenize_file(file_path, DESIRED_NUM_CHUNKS, split_special_token[0].encode("utf-8"), PAT)
+    logging.info("Word count generated.")
     return train_bpe_from_word_count(word_count, split_special_token[0].encode("utf-8"), vocab_size)
