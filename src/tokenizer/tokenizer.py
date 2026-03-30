@@ -3,6 +3,8 @@ from tokenizer.constants import PAT
 import logging
 import os
 from collections.abc import Iterable, Iterator
+from tokenizer.constants import MAX_READ_TEXT_LENGTH
+import pickle
 
 
 logging.basicConfig(
@@ -37,10 +39,10 @@ class Tokenizer:
         """vocab and merges files should be in pickle format."""
 
         with open(vocab_path, "rb") as f:
-            vocab = p.load(f)
+            vocab = pickle.load(f)
 
         with open(merges_path, "rb") as f:
-            merges = p.load(f)
+            merges = pickle.load(f)
 
         return cls(vocab, merges, special_tokens)
 
@@ -64,11 +66,11 @@ class Tokenizer:
         # 1
         if self._special_tokens:
             pattern = re.compile("|".join(map(re.escape, self._special_tokens)))
-            logging.info("regexp used: %s", pattern.pattern)
+            # logging.info("regexp used: %s", pattern.pattern)
 
             paragraphs = pattern.split(text)
             existing_special_tokens = pattern.findall(text)
-            logging.info("special tokens found: %s", existing_special_tokens)
+            # logging.info("special tokens found: %s", existing_special_tokens)
             special_token_ids = [self._vocab_to_id[token.encode("utf-8")] for token in existing_special_tokens]
         else:
             paragraphs = [text]
@@ -171,5 +173,18 @@ class Tokenizer:
         return bytes_form.decode("utf-8", errors="replace")
 
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
+        chunk = []
+        total_length = 0
+
         for text in iterable:
-            yield from self.encode(text)
+            chunk.append(text)
+            total_length += len(text)
+            if total_length > MAX_READ_TEXT_LENGTH:
+                yield from self.encode("".join(chunk))
+                chunk = []
+                total_length = 0
+
+                logging.info("finished one chunk")
+
+        if chunk:
+            yield from self.encode("".join(chunk))

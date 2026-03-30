@@ -164,6 +164,8 @@ cython_debug/
 
 # downloaded training data.
 data/*.txt
+data/*/encoding_result
+data/*/full_encoding_result
 
 .vscode/
 
