@@ -34,6 +34,7 @@ build-backend = "uv_build"
 packages = [
     { path = "src/tokenizer", name = "tokenizer" },
     { path = "src/cs336_basics", name = "cs336_basics" },
+    { path = "src/llm", name = "llm" },
 ]
 
 

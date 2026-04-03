@@ -13,6 +13,9 @@ from pathlib import Path
 from tokenizer.bpe import train_bpe_from_file
 from tokenizer.tokenizer import Tokenizer
 
+from llm.set_seed import set_seed
+from llm.linear import Linear
+
 
 def run_linear(
     d_in: int,
@@ -32,8 +35,10 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
-
-    raise NotImplementedError
+    set_seed(43)
+    linear = Linear(d_in, d_out)
+    linear.load_state_dict({"weight": weights})
+    return linear(in_features)
 
 
 def run_embedding(
