@@ -14,7 +14,7 @@ from tokenizer.bpe import train_bpe_from_file
 from tokenizer.tokenizer import Tokenizer
 
 from llm.set_seed import set_seed
-from llm.linear import Linear
+from llm.linear import Linear, Embedding
 
 
 def run_linear(
@@ -59,8 +59,10 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
-
-    raise NotImplementedError
+    set_seed(43)
+    embedding = Embedding(vocab_size, d_model)
+    embedding.load_state_dict({"weight": weights})
+    return embedding(token_ids)
 
 
 def run_swiglu(
