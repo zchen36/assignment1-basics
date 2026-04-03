@@ -14,7 +14,8 @@ from tokenizer.bpe import train_bpe_from_file
 from tokenizer.tokenizer import Tokenizer
 
 from llm.set_seed import set_seed
-from llm.linear import Linear, Embedding
+from llm.linear import Linear
+from llm.embedding import Embedding
 
 
 def run_linear(
