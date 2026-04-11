@@ -1,4 +1,4 @@
-from jaxtyping import Float, Int
+from jaxtyping import Float
 import torch
 from torch import Tensor, nn
 from einops import einsum
