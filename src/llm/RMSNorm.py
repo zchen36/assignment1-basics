@@ -13,6 +13,8 @@ class RMSNorm(nn.Module):
     def forward(self, x: Float[Tensor, "... d_model"]) -> Float[Tensor, "... d_model"]:
         # Compute RMS: sqrt(mean(x^2) + eps)
         # We take the mean over the last dimension (d_model)
+        in_type = x.dtype
+        x = x.to(torch.float32)
         rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
         # return self.scale * (x * rms)
-        return einsum(self.scale, x * rms, "d_model, ... d_model -> ... d_model")
+        return einsum(self.scale, x * rms, "d_model, ... d_model -> ... d_model").to(in_type)
