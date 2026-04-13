@@ -1,5 +1,4 @@
 from jaxtyping import Float
-import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
 from einops import einsum
