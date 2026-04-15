@@ -1,7 +1,6 @@
 from jaxtyping import Float
 from torch import Tensor, nn
 import torch.nn.functional as F
-from einops import einsum
 from llm.linear import Linear
 
 
