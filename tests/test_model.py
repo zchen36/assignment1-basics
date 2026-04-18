@@ -2,6 +2,8 @@ from einops import rearrange
 import numpy
 import torch
 import torch.nn.functional as F
+import logging
+
 
 from .adapters import (
     run_multihead_self_attention_with_rope,
@@ -15,6 +17,11 @@ from .adapters import (
     run_transformer_lm,
     run_linear,
     run_embedding,
+)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
 
@@ -88,6 +95,7 @@ def test_multihead_self_attention(numpy_snapshot, in_embeddings, d_model, n_head
         o_proj_weight=o_proj_weight,
         in_features=in_embeddings,
     )
+    print(f"actual_output shape: {actual_output.shape}")
     numpy_snapshot.assert_match(actual_output, atol=1e-6)
 
 

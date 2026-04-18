@@ -1,13 +1,21 @@
-from jaxtyping import Float, Bool
-from torch import Tensor
-from einops import einsum
+from jaxtyping import Float, Bool, Int
+from torch import Tensor, nn
+import torch
+from einops import einsum, rearrange
 from llm.softmax import softmax
+from llm.RoPE import RotaryPositionalEmbedding
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 
 def dot_product_attention(
     queries: Float[Tensor, "batch_size ... q_len d_k"],
     keys: Float[Tensor, "batch_size ... k_len d_k"],
-    values: Float[Tensor, "batch_size ... seq_len d_v"],
+    values: Float[Tensor, "batch_size ... k_len d_v"],
     mask: Bool[Tensor, "... q_len k_len"] = None,
 ):
     d_k = keys.shape[-1]
@@ -25,3 +33,164 @@ def dot_product_attention(
         values,
         "batch_size ... q_len k_len, batch_size ... k_len d_v -> batch_size ... q_len d_v",
     )
+
+
+class MultiHeadAttention(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__()
+        assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
+
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+
+        self.q_weight: Float[Tensor, "d_model d_k_sum"] = nn.Parameter(
+            torch.empty((d_model, d_model), device=device, dtype=dtype)
+        )
+        self.k_weight: Float[Tensor, "d_model d_q_sum"] = nn.Parameter(
+            torch.empty((d_model, d_model), device=device, dtype=dtype)
+        )
+        self.v_weight: Float[Tensor, "d_model d_v_sum"] = nn.Parameter(
+            torch.empty((d_model, d_model), device=device, dtype=dtype)
+        )
+        self.o_weight: Float[Tensor, "d_model d_v_sum"] = nn.Parameter(
+            torch.empty((d_model, d_model), device=device, dtype=dtype)
+        )
+
+    def forward(
+        self,
+        x: Float[Tensor, "... seq_len d_model"],
+        mask: Bool[Tensor, "seq_len seq_len"] | None = None,
+    ) -> Float[Tensor, "batch seq_len d_model"]:
+        seq_len = x.shape[-2]
+
+        w_qkv: Float[Tensor, "d_model d_model_3"] = torch.cat([self.q_weight, self.k_weight, self.v_weight], dim=1)
+
+        # logging.info(f"x shape: {x.shape}")
+        # logging.info(f"q_weight shape: {self.q_weight.shape}")
+        # logging.info(f"k_weight shape: {self.k_weight.shape}")
+        # logging.info(f"v_weight shape: {self.v_weight.shape}")
+        # logging.info(f"w_qkv shape: {w_qkv.shape}")
+
+        xw_qkv = einsum(x, w_qkv, "... seq_len d_model, d_model d_model_3 -> ... seq_len d_model_3")
+
+        qkv = rearrange(xw_qkv, "... (three d_model) -> three ... d_model", three=3)
+
+        q: Float[Tensor, "... seq_len d_k_sum"]
+        k: Float[Tensor, "... seq_len d_k_sum"]
+        v: Float[Tensor, "... seq_len d_v_sum"]
+        q, k, v = qkv[0], qkv[1], qkv[2]
+
+        q = rearrange(q, "... seq_len (num_heads d_k) -> ... num_heads seq_len d_k", num_heads=self.num_heads)
+        k = rearrange(k, "... seq_len (num_heads d_k) -> ... num_heads seq_len d_k", num_heads=self.num_heads)
+        v = rearrange(v, "... seq_len (num_heads d_v) -> ... num_heads seq_len d_v", num_heads=self.num_heads)
+
+        if mask is None:
+            mask: Bool[Tensor, "... seq_len seq_len"] = torch.tril(
+                torch.ones(seq_len, seq_len, dtype=torch.bool, device=x.device)
+            )
+
+        multi_head_attention: Float[Tensor, "... h seq_len d_v"] = dot_product_attention(q, k, v, mask)
+
+        concat_attention: Float[Tensor, "... seq_len d_v_sum"] = rearrange(
+            multi_head_attention, "... h seq_len d_v -> ... seq_len (h d_v)"
+        )
+
+        return einsum(concat_attention, self.o_weight, "... d_v_sum, ... d_model d_v_sum -> ... d_model")
+
+
+class MultiHeadAttentionWithRope(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        max_seq_len: int,
+        theta: float,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__()
+        assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
+
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+
+        self.q_weight: Float[Tensor, "d_model d_k_sum"] = nn.Parameter(
+            torch.empty((d_model, d_model), device=device, dtype=dtype)
+        )
+        self.k_weight: Float[Tensor, "d_model d_q_sum"] = nn.Parameter(
+            torch.empty((d_model, d_model), device=device, dtype=dtype)
+        )
+        self.v_weight: Float[Tensor, "d_model d_v_sum"] = nn.Parameter(
+            torch.empty((d_model, d_model), device=device, dtype=dtype)
+        )
+        self.o_weight: Float[Tensor, "d_model d_v_sum"] = nn.Parameter(
+            torch.empty((d_model, d_model), device=device, dtype=dtype)
+        )
+
+        self.rope = RotaryPositionalEmbedding(theta, self.d_k, max_seq_len, device)
+
+    def forward(
+        self,
+        x: Float[Tensor, "... seq_len d_model"],
+        mask: Bool[Tensor, "seq_len seq_len"] | None = None,
+        token_positions: Int[Tensor, " ... seq_len"] | None = None,
+    ) -> Float[Tensor, "batch seq_len d_model"]:
+        seq_len = x.shape[-2]
+
+        w_qkv: Float[Tensor, "d_model d_model_3"] = torch.cat([self.q_weight, self.k_weight, self.v_weight], dim=1)
+
+        # logging.info(f"x shape: {x.shape}")
+        # logging.info(f"q_weight shape: {self.q_weight.shape}")
+        # logging.info(f"k_weight shape: {self.k_weight.shape}")
+        # logging.info(f"v_weight shape: {self.v_weight.shape}")
+        # logging.info(f"w_qkv shape: {w_qkv.shape}")
+
+        xw_qkv = einsum(x, w_qkv, "... seq_len d_model, d_model d_model_3 -> ... seq_len d_model_3")
+
+        qkv = rearrange(xw_qkv, "... (three d_model) -> three ... d_model", three=3)
+
+        q: Float[Tensor, "... seq_len d_k_sum"]
+        k: Float[Tensor, "... seq_len d_k_sum"]
+        v: Float[Tensor, "... seq_len d_v_sum"]
+        q, k, v = qkv[0], qkv[1], qkv[2]
+
+        q = rearrange(q, "... seq_len (num_heads d_k) -> ... num_heads seq_len d_k", num_heads=self.num_heads)
+        k = rearrange(k, "... seq_len (num_heads d_k) -> ... num_heads seq_len d_k", num_heads=self.num_heads)
+        v = rearrange(v, "... seq_len (num_heads d_v) -> ... num_heads seq_len d_v", num_heads=self.num_heads)
+
+        q = self.rope(q, token_positions)
+        k = self.rope(k, token_positions)
+
+        if mask is None:
+            mask: Bool[Tensor, "... seq_len seq_len"] = torch.tril(
+                torch.ones(seq_len, seq_len, dtype=torch.bool, device=x.device)
+            )
+
+        multi_head_attention: Float[Tensor, "... h seq_len d_v"] = dot_product_attention(q, k, v, mask)
+
+        concat_attention: Float[Tensor, "... seq_len d_v_sum"] = rearrange(
+            multi_head_attention, "... h seq_len d_v -> ... seq_len (h d_v)"
+        )
+
+        return einsum(concat_attention, self.o_weight, "... d_v_sum, ... d_model d_v_sum -> ... d_model")
+
+
+if __name__ == "__main__":
+    multi_head_attention = MultiHeadAttention(512, 8)
+    x = torch.randn(1, 10, 512)
+    print(multi_head_attention(x).shape)
+
+    B, H, T, D = 2, 4, 6, 8
+    multi_head_attention_with_rope = MultiHeadAttentionWithRope(D, H, T, 10000)
+    x = torch.randn(B, T, D)
+    token_positions = torch.arange(T).expand(B, H, T)
+
+    y = multi_head_attention_with_rope(x, token_positions=token_positions)
