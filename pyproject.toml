@@ -48,7 +48,7 @@ log_cli_level = "INFO"
 addopts = "-s -vv --rich"
 
 [tool.ruff]
-line-length = 120
+line-length = 88
 
 [tool.ruff.lint.extend-per-file-ignores]
 # Also ignore `E402` in all `__init__.py` files.

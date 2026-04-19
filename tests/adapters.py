@@ -20,7 +20,12 @@ from llm.RMSNorm import RMSNorm
 from llm.SwiGLU import SwiGLU
 from llm.RoPE import RotaryPositionalEmbedding
 from llm.softmax import softmax
-from llm.attention import dot_product_attention, MultiHeadAttention, MultiHeadAttentionWithRope
+from llm.attention import (
+    dot_product_attention,
+    MultiHeadAttention,
+    MultiHeadAttentionWithRope,
+    PreNormTransformer,
+)
 
 
 def run_linear(
@@ -102,7 +107,9 @@ def run_swiglu(
     # swiglu.w3.weight.data = w3_weight
 
     swiglu = SwiGLU(d_model, d_ff)
-    swiglu.load_state_dict({"w1.weight": w1_weight, "w2.weight": w2_weight, "w3.weight": w3_weight})
+    swiglu.load_state_dict(
+        {"w1.weight": w1_weight, "w2.weight": w2_weight, "w3.weight": w3_weight}
+    )
     return swiglu(in_features)
 
 
@@ -212,7 +219,9 @@ def run_multihead_self_attention_with_rope(
         implementation with the given QKV projection weights and input features.
     """
 
-    multi_head_attention_with_rope = MultiHeadAttentionWithRope(d_model, num_heads, max_seq_len, theta)
+    multi_head_attention_with_rope = MultiHeadAttentionWithRope(
+        d_model, num_heads, max_seq_len, theta
+    )
     multi_head_attention_with_rope.load_state_dict(
         {
             "q_weight": q_proj_weight.t(),
@@ -320,7 +329,29 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    transformer_block = PreNormTransformer(
+        d_model=d_model,
+        num_heads=num_heads,
+        max_seq_len=max_seq_len,
+        d_ff=d_ff,
+        theta=theta,
+    )
+
+    transformer_block.load_state_dict(
+        {
+            "multi_head_attention.q_weight": weights["attn.q_proj.weight"].t(),
+            "multi_head_attention.k_weight": weights["attn.k_proj.weight"].t(),
+            "multi_head_attention.v_weight": weights["attn.v_proj.weight"].t(),
+            "multi_head_attention.o_weight": weights["attn.output_proj.weight"],
+            "rms_norm_attn.scale": weights["ln1.weight"],
+            "rms_norm_ffn.scale": weights["ln2.weight"],
+            "swi_glu.w1.weight": weights["ffn.w1.weight"],
+            "swi_glu.w2.weight": weights["ffn.w2.weight"],
+            "swi_glu.w3.weight": weights["ffn.w3.weight"],
+        }
+    )
+
+    return transformer_block(in_features)
 
 
 def run_transformer_lm(
@@ -501,7 +532,9 @@ def run_cross_entropy(
     raise NotImplementedError
 
 
-def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
+def run_gradient_clipping(
+    parameters: Iterable[torch.nn.Parameter], max_l2_norm: float
+) -> None:
     """Given a set of parameters, clip their combined gradients to have l2 norm at most max_l2_norm.
 
     Args:
