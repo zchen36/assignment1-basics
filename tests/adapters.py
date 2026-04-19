@@ -25,6 +25,7 @@ from llm.attention import (
     MultiHeadAttention,
     MultiHeadAttentionWithRope,
     PreNormTransformer,
+    Transformer,
 )
 
 
@@ -433,7 +434,61 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    transformer = Transformer(
+        vocab_size=vocab_size,
+        num_layers=num_layers,
+        d_model=d_model,
+        num_heads=num_heads,
+        max_seq_len=context_length,
+        d_ff=d_ff,
+        theta=rope_theta,
+    )
+
+    transformer.load_state_dict(
+        {
+            "embedding.weight": weights["token_embeddings.weight"],
+            "norm.scale": weights["ln_final.weight"],
+            "output_embedding.weight": weights["lm_head.weight"],
+        },
+        strict=False,
+    )
+
+    for i in range(num_layers):
+        print(i)
+        transformer.load_state_dict(
+            {
+                f"attn_layers.{i}.multi_head_attention.q_weight": weights[
+                    f"layers.{i}.attn.q_proj.weight"
+                ].t(),
+                f"attn_layers.{i}.multi_head_attention.k_weight": weights[
+                    f"layers.{i}.attn.k_proj.weight"
+                ].t(),
+                f"attn_layers.{i}.multi_head_attention.v_weight": weights[
+                    f"layers.{i}.attn.v_proj.weight"
+                ].t(),
+                f"attn_layers.{i}.multi_head_attention.o_weight": weights[
+                    f"layers.{i}.attn.output_proj.weight"
+                ],
+                f"attn_layers.{i}.rms_norm_attn.scale": weights[
+                    f"layers.{i}.ln1.weight"
+                ],
+                f"attn_layers.{i}.rms_norm_ffn.scale": weights[
+                    f"layers.{i}.ln2.weight"
+                ],
+                f"attn_layers.{i}.swi_glu.w1.weight": weights[
+                    f"layers.{i}.ffn.w1.weight"
+                ],
+                f"attn_layers.{i}.swi_glu.w2.weight": weights[
+                    f"layers.{i}.ffn.w2.weight"
+                ],
+                f"attn_layers.{i}.swi_glu.w3.weight": weights[
+                    f"layers.{i}.ffn.w3.weight"
+                ],
+            },
+            strict=False,
+        )
+
+    return transformer(in_indices)
 
 
 def run_rmsnorm(

@@ -6,6 +6,8 @@ from llm.softmax import softmax
 from llm.RoPE import RotaryPositionalEmbedding
 from llm.RMSNorm import RMSNorm
 from llm.SwiGLU import SwiGLU
+from llm.embedding import Embedding
+from llm.linear import Linear
 import logging
 
 logging.basicConfig(
@@ -257,7 +259,7 @@ class PreNormTransformer(nn.Module):
         self.multi_head_attention = MultiHeadAttentionWithRope(
             d_model, num_heads, max_seq_len, theta, device, dtype
         )
-        self.swi_glu = SwiGLU(d_model, d_ff)
+        self.swi_glu = SwiGLU(d_model, d_ff, device, dtype)
 
     def forward(
         self,
@@ -283,6 +285,54 @@ class PreNormTransformer(nn.Module):
         ffn_out = self.swi_glu(x_norm)
         x = residual + ffn_out
         return x
+
+
+class Transformer(nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        # context_length: int, same as max_seq_len?
+        num_layers: int,
+        d_model: int,
+        num_heads: int,
+        max_seq_len: int,
+        d_ff: int,
+        theta: float,
+        eps: float = 1e-5,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__()
+        self.embedding = Embedding(
+            vocab_size=vocab_size, embedding_dim=d_model, device=device, dtype=dtype
+        )
+
+        self.attn_layers = nn.ModuleList(
+            [
+                PreNormTransformer(
+                    d_model=d_model,
+                    num_heads=num_heads,
+                    max_seq_len=max_seq_len,
+                    d_ff=d_ff,
+                    theta=theta,
+                    eps=eps,
+                    device=device,
+                    dtype=dtype,
+                )
+                for _ in range(num_layers)
+            ]
+        )
+
+        self.norm = RMSNorm(d_model=d_model, eps=eps, device=device, dtype=dtype)
+        self.output_embedding = Linear(d_in=d_model, d_out=vocab_size)
+
+    def forward(self, x: Int[Tensor, "batch seq_len"]):
+        x = self.embedding(x)
+        for layer in self.attn_layers:
+            x = layer(x)
+
+        return self.output_embedding(self.norm(x))
+        # return softmax(x, -1)
 
 
 if __name__ == "__main__":
