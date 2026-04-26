@@ -29,6 +29,7 @@ from llm.attention import (
 )
 from llm.cross_entropy import cross_entropy
 from llm.adamW import AdamW
+from llm.lr_schedule import lr_cos_schedule
 
 
 def run_linear(
@@ -635,7 +636,14 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+
+    return lr_cos_schedule(
+        it=it,
+        max_learning_rate=max_learning_rate,
+        min_learning_rate=min_learning_rate,
+        warmup_iters=warmup_iters,
+        cosine_cycle_iters=cosine_cycle_iters,
+    )
 
 
 def run_save_checkpoint(
