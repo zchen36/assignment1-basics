@@ -30,6 +30,7 @@ from llm.attention import (
 from llm.cross_entropy import cross_entropy
 from llm.adamW import AdamW
 from llm.lr_schedule import lr_cos_schedule
+from llm.gradient_clipping import gradient_clipping
 
 
 def run_linear(
@@ -601,7 +602,7 @@ def run_gradient_clipping(
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
-    raise NotImplementedError
+    return gradient_clipping(parameters=parameters, max_l2_norm=max_l2_norm)
 
 
 def get_adamw_cls() -> Any:
