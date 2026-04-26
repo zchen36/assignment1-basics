@@ -28,6 +28,7 @@ from llm.attention import (
     Transformer,
 )
 from llm.cross_entropy import cross_entropy
+from llm.adamW import AdamW
 
 
 def run_linear(
@@ -606,7 +607,7 @@ def get_adamw_cls() -> Any:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    raise NotImplementedError
+    return AdamW
 
 
 def run_get_lr_cosine_schedule(
