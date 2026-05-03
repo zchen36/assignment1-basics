@@ -169,6 +169,11 @@ class MultiHeadAttentionWithRope(nn.Module):
             torch.empty((d_model, d_model), device=device, dtype=dtype)
         )
 
+        nn.init.trunc_normal_(self.q_weight, mean=0.0, std=0.02, a=-3, b=3)
+        nn.init.trunc_normal_(self.k_weight, mean=0.0, std=0.02, a=-3, b=3)
+        nn.init.trunc_normal_(self.v_weight, mean=0.0, std=0.02, a=-3, b=3)
+        nn.init.trunc_normal_(self.o_weight, mean=0.0, std=0.02, a=-3, b=3)
+
         self.rope = RotaryPositionalEmbedding(theta, self.d_k, max_seq_len, device)
 
     def forward(
