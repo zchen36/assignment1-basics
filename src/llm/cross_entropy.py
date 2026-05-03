@@ -1,5 +1,5 @@
 from jaxtyping import Float, Int
-from torch import Tensor, nn
+from torch import Tensor
 import torch
 
 

@@ -324,7 +324,9 @@ class Transformer(nn.Module):
         )
 
         self.norm = RMSNorm(d_model=d_model, eps=eps, device=device, dtype=dtype)
-        self.output_embedding = Linear(d_in=d_model, d_out=vocab_size)
+        self.output_embedding = Linear(
+            d_in=d_model, d_out=vocab_size, device=device, dtype=dtype
+        )
 
     def forward(self, x: Int[Tensor, "batch seq_len"]):
         x = self.embedding(x)

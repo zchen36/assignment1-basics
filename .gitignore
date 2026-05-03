@@ -166,7 +166,10 @@ cython_debug/
 data/*.txt
 data/*/encoding_result
 data/*/full_encoding_result
+data/ckpt
 
 .vscode/
+
+wandb/
 
 .DS_Store
