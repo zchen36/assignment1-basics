@@ -84,9 +84,9 @@ def main():
         "eps": 1e-5,
         # optimization
         "batch_size": 32,
-        "max_iters": 10_000,
-        "max_lr": 3e-4,
-        "min_lr": 3e-5,
+        "max_iters": 20_000,
+        "max_lr": 5e-4,
+        "min_lr": 5e-5,
         "warmup_iters": 500,
         "weight_decay": 0.01,
         "betas": (0.9, 0.999),

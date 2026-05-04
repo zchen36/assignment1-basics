@@ -24,6 +24,14 @@ def load_checkpoint(
     optimizer: torch.optim.Optimizer,
 ) -> int:
     obj = torch.load(src)
-    model.load_state_dict(obj["model"])
+    model_state_dict = obj["model"]
+
+    if any(key.startswith("_orig_mod.") for key in model_state_dict):
+        model_state_dict = {
+            key.removeprefix("_orig_mod."): value
+            for key, value in model_state_dict.items()
+        }
+
+    model.load_state_dict(model_state_dict)
     optimizer.load_state_dict(obj["optimizer"])
     return obj["iteration"]
